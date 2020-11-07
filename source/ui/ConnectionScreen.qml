@@ -17,11 +17,51 @@ Item {
         }
     }
 
+
+
     Image {
         id: logo
+        visible: !wsw.connectionDropReason
         width: Math.min(implicitWidth, parent.width - 32)
         fillMode: Image.PreserveAspectFit
         anchors.centerIn: parent
         source: "logo.webp"
+    }
+
+    // TODO: Should we keep the logo within the stack view?
+    StackView {
+        id: stackView
+        anchors.fill: parent
+    }
+
+    Connections {
+        target: wsw
+        onConnectionDropReasonChanged: {
+            let reason = wsw.connectionDropReason
+            stackView.pop(null)
+            if (reason == Wsw.GenericDropReason) {
+                stackView.push(genericDropReasonComponent)
+            } else if (reason == Wsw.PasswordRequired) {
+                stackView.push(passwordRequiredComponent)
+            }
+        }
+    }
+
+    Component {
+        id: genericDropReasonComponent
+
+        Rectangle {
+            anchors.fill: parent
+            color: "red"
+        }
+    }
+    
+    Component {
+        id: passwordRequiredComponent
+
+        Rectangle {
+            anchors.fill: parent
+            color: "orange"
+        }
     }
 }

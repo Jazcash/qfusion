@@ -81,6 +81,9 @@ public:
 
 	void handleConfigString( unsigned configStringNum, const wsw::StringView &configString ) override;
 
+	void openConnectionFailedPopup( const wsw::StringView &reason ) override;
+	void openPasswordInputPopup() override;
+
 	void enterUIRenderingMode();
 	void leaveUIRenderingMode();
 
@@ -94,6 +97,14 @@ public:
 	Q_PROPERTY( bool hasTwoTeams READ hasTwoTeams NOTIFY hasTwoTeamsChanged );
 	Q_PROPERTY( QString teamAlphaName READ teamAlphaName NOTIFY teamAlphaNameChanged );
 	Q_PROPERTY( QString teamBetaName READ teamBetaName NOTIFY teamBetaNameChanged );
+
+	enum DropReason {
+		PasswordRequired = 1,
+		GenericDropReason,
+	};
+	Q_ENUM( DropReason );
+
+	Q_PROPERTY( QVariant connectionDropReason READ getConnectionDropReason NOTIFY connectionDropReasonChanged );
 
 	Q_INVOKABLE void registerNativelyDrawnItem( QQuickItem *item );
 	Q_INVOKABLE void unregisterNativelyDrawnItem( QQuickItem *item );
@@ -147,6 +158,8 @@ signals:
 	Q_SIGNAL void isShowingDemoPlaybackMenuChanged( bool isShowingDemoMenu );
 	Q_SIGNAL void isDebuggingNativelyDrawnItemsChanged( bool isDebuggingNativelyDrawnItems );
 	Q_SIGNAL void hasPendingCVarChangesChanged( bool hasPendingCVarChanges );
+
+	Q_SIGNAL void connectionDropReasonChanged( QVariant dropReason );
 public slots:
 	Q_SLOT void onSceneGraphInitialized();
 	Q_SLOT void onRenderRequested();
@@ -219,6 +232,9 @@ private:
 
 	QMap<QQuickItem *, QPair<QVariant, cvar_t *>> m_pendingCVarChanges;
 
+	wsw::StaticString<64> m_connectionScreenMessageBuffer;
+	std::optional<DropReason> m_activeConnectionDropReason;
+
 	[[nodiscard]]
 	static auto colorForNum( int num ) -> QColor {
 		const auto *v = color_table[num];
@@ -277,6 +293,11 @@ private:
 	auto teamBetaName() const -> QString;
 	[[nodiscard]]
 	auto convertName( const wsw::StringView &rawName ) const -> QString;
+
+	[[nodiscard]]
+	auto getConnectionDropReason() const -> QVariant {
+		return m_activeConnectionDropReason ? QVariant( (int)*m_activeConnectionDropReason ) : QVariant();
+	}
 
 	explicit QtUISystem( int width, int height );
 
@@ -723,7 +744,11 @@ void QtUISystem::checkPropertyChanges() {
 	m_lastFrameState.clientState = actualClientState;
 	if( m_lastFrameState.clientState != lastClientState ) {
 		if( actualClientState == CA_DISCONNECTED ) {
-			setActiveMenuMask( MainMenu, 0 );
+			if( m_activeConnectionDropReason ) {
+				setActiveMenuMask( ConnectionScreen, 0 );
+			} else {
+				setActiveMenuMask( MainMenu, 0 );
+			}
 			m_chatModel.clear();
 			m_teamChatModel.clear();
 		} else if( actualClientState == CA_ACTIVE ) {
@@ -1235,6 +1260,22 @@ void QtUISystem::addToTeamChat( const wsw::StringView &name, int64_t frameTimest
 
 void QtUISystem::handleConfigString( unsigned configStringIndex, const wsw::StringView &string ) {
 	m_callvotesModel.handleConfigString( configStringIndex, string );
+}
+
+void QtUISystem::openConnectionFailedPopup( const wsw::StringView &reason ) {
+	m_activeConnectionDropReason = GenericDropReason;
+	// This is the least hacky way to keep state changes detection in the single method
+	// TODO: Or just use some "pending" flag?
+	// TODO: Or better a "pending drop reason"?
+	m_lastFrameState.clientState = CA_CONNECTING;
+	m_connectionScreenMessageBuffer.assign( reason.drop( m_connectionScreenMessageBuffer.capacity() ) );
+	Q_EMIT connectionDropReasonChanged( (int)*m_activeConnectionDropReason );
+}
+
+void QtUISystem::openPasswordInputPopup() {
+	m_activeConnectionDropReason = PasswordRequired;
+	m_lastFrameState.clientState = CA_CONNECTING;
+	Q_EMIT connectionDropReasonChanged( PasswordRequired );
 }
 
 }

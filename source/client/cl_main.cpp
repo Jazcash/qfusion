@@ -174,7 +174,6 @@ void CL_ForwardToServer_f( void ) {
 * CL_ServerDisconnect_f
 */
 void CL_ServerDisconnect_f( void ) {
-	char menuparms[MAX_STRING_CHARS];
 	int type;
 	char reason[MAX_STRING_CHARS];
 
@@ -189,10 +188,7 @@ void CL_ServerDisconnect_f( void ) {
 
 	Com_Printf( "Connection was closed by server: %s\n", reason );
 
-	Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
-				 DROP_REASON_CONNTERMINATED, cls.servername, type, reason );
-
-	Cbuf_ExecuteText( EXEC_NOW, menuparms );
+	wsw::ui::UISystem::instance()->openConnectionFailedPopup( wsw::StringView( reason ) );
 }
 
 /*
@@ -776,7 +772,6 @@ static void CL_Disconnect_SendCommand( void ) {
 * This is also called on Com_Error, so it shouldn't cause any errors
 */
 void CL_Disconnect( const char *message ) {
-	char menuparms[MAX_STRING_CHARS];
 	bool wasconnecting;
 
 	// We have to shut down webdownloading first
@@ -876,10 +871,7 @@ void CL_Disconnect( const char *message ) {
 
 	if( cl_connectChain[0] == '\0' ) {
 		if( message != NULL ) {
-			Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
-						 ( wasconnecting ? DROP_REASON_CONNFAILED : DROP_REASON_CONNERROR ), cls.servername, DROP_TYPE_GENERAL, message );
-
-			Cbuf_ExecuteText( EXEC_NOW, menuparms );
+			wsw::ui::UISystem::instance()->openConnectionFailedPopup( wsw::StringView( message ) );
 		}
 	} else {
 		const char *s = strchr( cl_connectChain, ',' );
@@ -1116,15 +1108,9 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 		if( rejectflag & DROP_FLAG_AUTORECONNECT ) {
 			Com_Printf( "Automatic reconnecting allowed.\n" );
 		} else {
-			char menuparms[MAX_STRING_CHARS];
-
 			Com_Printf( "Automatic reconnecting not allowed.\n" );
-
 			CL_Disconnect( NULL );
-			Q_snprintfz( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i servername \"%s\" droptype %i rejectmessage \"%s\"",
-						 DROP_REASON_CONNFAILED, cls.servername, cls.rejecttype, cls.rejectmessage );
-
-			Cbuf_ExecuteText( EXEC_NOW, menuparms );
+			wsw::ui::UISystem::instance()->openConnectionFailedPopup( wsw::StringView( cls.rejectmessage ) );
 		}
 
 		return;
@@ -1472,7 +1458,7 @@ void CL_RequestNextDownload( void ) {
 				break;
 			}
 			const auto maybeConfigString = cl.configStrings.get( precache_check );
-			if( maybeConfigString ) {
+			if( !maybeConfigString ) {
 				break;
 			}
 
