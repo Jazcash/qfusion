@@ -2,6 +2,7 @@
 #define WSW_7bec9edc_f137_4385_ad94_191ee7088622_H
 
 #include <QAbstractListModel>
+#include <QJsonArray>
 
 #include "../qcommon/qcommon.h"
 #include "../qcommon/wswstringview.h"
@@ -13,9 +14,11 @@ class CallvotesModelProxy;
 
 class CallvotesModel : public QAbstractListModel {
 	friend class CallvotesModelProxy;
+
+	Q_OBJECT
 public:
 	enum Kind {
-		Missing,
+		NoArgs,
 		Boolean,
 		Number,
 		Player,
@@ -41,6 +44,11 @@ public:
 
 	void notifyOfChangesAtNum( int num );
 
+	// Generic signals are not really usable in QML, add the our one
+	Q_SIGNAL void currentChanged( int index, QVariant value );
+
+	Q_INVOKABLE QJsonArray getOptionsList( int handle ) const;
+
 	[[nodiscard]]
 	auto roleNames() const -> QHash<int, QByteArray> override;
 	[[nodiscard]]
@@ -50,6 +58,7 @@ public:
 };
 
 class CallvotesModelProxy {
+	friend class CallvotesModel;
 public:
 	struct Entry {
 		QString name;

@@ -21,6 +21,8 @@
         <file>GraphicsSettings.qml</file>
         <file>HelpPage.qml</file>
         <file>HudSettings.qml</file>
+        <file>InGameCallvoteOptionSelector.qml</file>
+        <file>InGameCallvotePlayerSelector.qml</file>
         <file>InGameCallvotesPage.qml</file>
         <file>InGameChatPage.qml</file>
         <file>InGameGeneralPage.qml</file>

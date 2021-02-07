@@ -4,6 +4,8 @@
 #include "../qcommon/compression.h"
 #include "../qcommon/wswstringsplitter.h"
 
+#include <QJsonObject>
+
 using wsw::operator""_asView;
 
 namespace wsw::ui {
@@ -12,7 +14,7 @@ auto CallvotesModel::roleNames() const -> QHash<int, QByteArray> {
 	return {
 		{ Name, "name" },
 		{ Desc, "desc" },
-		{ ArgsKind, "kind" },
+		{ ArgsKind, "argsKind" },
 		{ ArgsHandle, "argsHandle" },
 		{ Current, "current" }
 	};
@@ -45,9 +47,25 @@ auto CallvotesModel::data( const QModelIndex &index, int role ) const -> QVarian
 void CallvotesModel::notifyOfChangesAtNum( int num ) {
 	const auto it = std::find( m_entryNums.begin(), m_entryNums.end(), num );
 	if( it != m_entryNums.end() ) {
-		QModelIndex index( createIndex( (int)( it - m_entryNums.begin() ), 0 ) );
-		Q_EMIT dataChanged( index, index, kRoleCurrentChangeset );
+		const auto index = (int)( it - m_entryNums.begin() );
+		QModelIndex modelIndex( createIndex( index, 0 ) );
+		Q_EMIT dataChanged( modelIndex, modelIndex, kRoleCurrentChangeset );
+		Q_EMIT currentChanged( index, m_proxy->getEntry( num ).current );
 	}
+}
+
+auto CallvotesModel::getOptionsList( int handle ) const -> QJsonArray {
+	assert( (unsigned)( handle - 1 ) < (unsigned)m_proxy->m_options.size() );
+	[[maybe_unused]] const auto &[options, storedHandle] = m_proxy->m_options[handle - 1];
+	assert( handle == storedHandle );
+
+	QJsonArray result;
+	for( const auto &[off, len]: options.spans ) {
+		QString s( QString::fromUtf8( options.content.data() + off, len ) );
+		result.append( QJsonObject {{"name", s}, {"value", s}});
+	}
+
+	return result;
 }
 
 static const std::pair<wsw::StringView, CallvotesModel::Kind> kArgKindNames[] {
@@ -137,7 +155,7 @@ void CallvotesModelProxy::reload() {
 auto CallvotesModelProxy::addArgs( const std::optional<wsw::StringView> &maybeArgs )
 	-> std::optional<std::pair<CallvotesModel::Kind, std::optional<int>>> {
 	if( !maybeArgs ) {
-		return std::make_pair( CallvotesModel::Missing, std::nullopt );
+		return std::make_pair( CallvotesModel::NoArgs, std::nullopt );
 	}
 
 	wsw::StringSplitter splitter( *maybeArgs );
@@ -148,16 +166,16 @@ auto CallvotesModelProxy::addArgs( const std::optional<wsw::StringView> &maybeAr
 		return std::nullopt;
 	}
 
-	auto foundKind = CallvotesModel::Missing;
+	auto foundKind = CallvotesModel::NoArgs;
 	for( const auto &[name, kind] : kArgKindNames ) {
-		assert( kind != CallvotesModel::Missing );
+		assert( kind != CallvotesModel::NoArgs );
 		if( maybeHeadToken->equalsIgnoreCase( name ) ) {
 			foundKind = kind;
 			break;
 		}
 	}
 
-	if( foundKind == CallvotesModel::Missing ) {
+	if( foundKind == CallvotesModel::NoArgs ) {
 		return std::nullopt;
 	}
 	if( foundKind != CallvotesModel::Options ) {
